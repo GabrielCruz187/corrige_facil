@@ -59,7 +59,7 @@ export default function LandingPage() {
             </div>
 
             <p className="text-xs sm:text-sm text-foreground/50 pt-1 sm:pt-2">
-              Sem cartão de crédito. 50 correções grátis.
+              Sem cartão de crédito. 50 + correções grátis.
             </p>
           </div>
         </div>
