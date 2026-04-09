@@ -59,7 +59,7 @@ IMPORTANTE:
 - Responda APENAS com o JSON válido, sem explicações adicionais`
 
     const result = await generateText({
-      model: 'openai/gpt-4-mini',
+      model: 'openai/gpt-4o-mini',
       messages: [
         {
           role: 'user',

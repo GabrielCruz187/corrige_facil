@@ -39,7 +39,7 @@ Responda em JSON com este formato (APENAS JSON, sem explicações):
 }`
 
     const result = await generateText({
-      model: 'google/gemini-2.0-flash',
+      model: 'google/gemini-3-flash',
       messages: [
         {
           role: 'user',
@@ -83,3 +83,4 @@ Responda em JSON com este formato (APENAS JSON, sem explicações):
     )
   }
 }
+

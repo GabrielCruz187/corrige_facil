@@ -81,7 +81,7 @@ Responda em JSON com este formato:
 IMPORTANTE: Responda APENAS com o JSON, sem explicações adicionais.`
 
     const result = await generateText({
-      model: 'openai/gpt-4-mini',
+      model: 'openai/gpt-4o-mini',
       messages: [
         {
           role: 'user',
@@ -136,3 +136,4 @@ IMPORTANTE: Responda APENAS com o JSON, sem explicações adicionais.`
     )
   }
 }
+
