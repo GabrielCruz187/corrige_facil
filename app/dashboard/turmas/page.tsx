@@ -1,167 +1,104 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
-import { Users, TrendingUp, AlertCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Plus, Users, TrendingUp, BookOpen } from 'lucide-react'
+import { Empty } from '@/components/ui/empty'
 
-interface ClassStats {
-  turma: string
-  media: number
-  maiorNota: number
-  menorNota: number
-  totalAlunos: number
-  aprovados: number
-  emRisco: number
-  questoesComMaiorErro: Array<{ numero: number; erros: number }>
-}
-
-export default function ClassDashboard() {
-  const [classesStats, setClassesStats] = useState<ClassStats[]>([])
+export default function TurmasPage() {
+  const [turmas, setTurmas] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function loadData() {
+    async function fetchTurmas() {
       try {
-        const supabase = createClient()
-        const { data: correcoes } = await supabase
-          .from('correcoes')
-          .select('turma, nota_total, created_at')
-          .not('turma', 'is', null)
-
-        if (!correcoes) return
-
-        // Agrupar por turma
-        const grupoPorTurma: Record<string, any> = {}
-
-        correcoes.forEach((corr) => {
-          if (!grupoPorTurma[corr.turma]) {
-            grupoPorTurma[corr.turma] = {
-              turma: corr.turma,
-              notas: [],
-            }
-          }
-          grupoPorTurma[corr.turma].notas.push(corr.nota_total || 0)
-        })
-
-        // Calcular estatísticas
-        const stats = Object.values(grupoPorTurma).map((g: any) => {
-          const notas = g.notas.sort((a: number, b: number) => a - b)
-          const media = notas.reduce((a: number, b: number) => a + b, 0) / notas.length
-          const aprovados = notas.filter((n: number) => n >= 6).length
-          const emRisco = notas.filter((n: number) => n >= 4 && n < 6).length
-
-          return {
-            turma: g.turma,
-            media: media,
-            maiorNota: Math.max(...notas),
-            menorNota: Math.min(...notas),
-            totalAlunos: notas.length,
-            aprovados,
-            emRisco,
-            questoesComMaiorErro: [],
-          }
-        })
-
-        setClassesStats(stats)
+        const res = await fetch('/api/turmas')
+        if (res.ok) {
+          const data = await res.json()
+          setTurmas(data)
+        }
       } catch (error) {
-        console.error('Erro ao carregar dados:', error)
+        console.error('Erro ao buscar turmas:', error)
       } finally {
         setLoading(false)
       }
     }
-
-    loadData()
+    fetchTurmas()
   }, [])
-
-  if (loading) {
-    return <div className="p-8 text-center">Carregando dados...</div>
-  }
 
   return (
     <div className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Análise de Turmas</h1>
-        <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-          Visualize o desempenho de suas turmas e identifique alunos em risco
-        </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold sm:text-3xl">Minhas Turmas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Gerencie suas turmas e alunos</p>
+        </div>
+        <Button asChild className="w-full sm:w-auto text-xs sm:text-sm h-10 sm:h-12">
+          <Link href="/dashboard/turmas/nova">
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Turma
+          </Link>
+        </Button>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            <p className="mt-2 text-muted-foreground">Carregando dados...</p>
+            <p className="mt-2 text-muted-foreground">Carregando turmas...</p>
           </div>
         </div>
-      ) : classesStats.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 text-muted-foreground">Nenhuma turma encontrada</p>
-          </CardContent>
-        </Card>
+      ) : turmas.length === 0 ? (
+        <Empty
+          icon="BookOpen"
+          title="Nenhuma turma criada"
+          description="Crie sua primeira turma para começar a gerenciar alunos"
+          action={
+            <Button asChild>
+              <Link href="/dashboard/turmas/nova">
+                <Plus className="mr-2 h-4 w-4" />
+                Criar Turma
+              </Link>
+            </Button>
+          }
+        />
       ) : (
-        <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-          {classesStats.map((stats) => (
-            <Card key={stats.turma} className="flex flex-col">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg sm:text-xl">{stats.turma}</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
-                  {stats.totalAlunos} alunos
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 space-y-4">
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                  <div className="rounded-lg bg-primary/10 p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-muted-foreground">Média</div>
-                    <div className="mt-1 text-xl sm:text-2xl font-bold text-primary">
-                      {stats.media.toFixed(1)}
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {turmas.map((turma: any) => (
+            <Link key={turma.id} href={`/dashboard/turmas/${turma.id}`}>
+              <Card className="cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 h-full">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="line-clamp-2 text-base sm:text-lg">{turma.nome}</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm mt-1">{turma.serie}</CardDescription>
+                    </div>
+                    <div className="flex-shrink-0 inline-flex p-2 sm:p-3 bg-primary/10 rounded-lg">
+                      <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     </div>
                   </div>
-                  <div className="rounded-lg bg-green-500/10 p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-muted-foreground">Aprovados</div>
-                    <div className="mt-1 text-xl sm:text-2xl font-bold text-green-600">
-                      {stats.aprovados}
+                </CardHeader>
+                <CardContent className="space-y-3 sm:space-y-4">
+                  {turma.descricao && (
+                    <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2 sm:text-sm">
+                      {turma.descricao}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-2 border-t border-border">
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Alunos</p>
+                      <p className="text-lg font-bold sm:text-xl">{turma.alunos_count || 0}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Avaliações</p>
+                      <p className="text-lg font-bold sm:text-xl">{turma.avaliacoes_count || 0}</p>
                     </div>
                   </div>
-                  <div className="rounded-lg bg-yellow-500/10 p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-muted-foreground">Em Risco</div>
-                    <div className="mt-1 text-xl sm:text-2xl font-bold text-yellow-600">
-                      {stats.emRisco}
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-red-500/10 p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-muted-foreground">Reprovados</div>
-                    <div className="mt-1 text-xl sm:text-2xl font-bold text-red-600">
-                      {stats.totalAlunos - stats.aprovados - stats.emRisco}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Chart */}
-                <div className="mt-4 h-40 sm:h-48 -mx-4 sm:-mx-6">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[{ name: 'Nota', media: stats.media }]}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
-                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
-                      <Bar dataKey="media" fill="url(#colorMedia)" />
-                      <defs>
-                        <linearGradient id="colorMedia" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.8} />
-                          <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.2} />
-                        </linearGradient>
-                      </defs>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
