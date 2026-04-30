@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { data: turma, error: turmaError } = await supabase
       .from('turmas')
       .select('id')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('professor_id', user.id)
       .single()
 
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { data: alunos, error } = await supabase
       .from('alunos_turma')
       .select('*')
-      .eq('turma_id', params.id)
+      .eq('turma_id', id)
       .order('nome')
 
     if (error) throw error
@@ -38,8 +39,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: turma, error: turmaError } = await supabase
       .from('turmas')
       .select('id')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('professor_id', user.id)
       .single()
 
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: aluno, error } = await supabase
       .from('alunos_turma')
       .insert({
-        turma_id: params.id,
+        turma_id: id,
         nome,
         email,
         matricula,
@@ -85,3 +87,4 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Erro ao adicionar aluno' }, { status: 500 })
   }
 }
+

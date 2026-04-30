@@ -9,7 +9,6 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: 'CorrigeFácil - Correção de Provas com IA',
   description: 'Corrija provas automaticamente com inteligência artificial. Economize tempo e aumente a precisão na correção de questões objetivas e dissertativas.',
-  generator: 'v0.app',
   icons: {
     icon: [
       {

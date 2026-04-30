@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { TurmaInsights } from '@/components/turma-insights'
 
 export default function TurmaDetailPage() {
   const params = useParams()
@@ -22,14 +22,16 @@ export default function TurmaDetailPage() {
 
   const [turma, setTurma] = useState<any>(null)
   const [alunos, setAlunos] = useState([])
+  const [insights, setInsights] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [turmaRes, alunosRes] = await Promise.all([
+        const [turmaRes, alunosRes, insightsRes] = await Promise.all([
           fetch(`/api/turmas/${turmaId}`),
-          fetch(`/api/turmas/${turmaId}/alunos`)
+          fetch(`/api/turmas/${turmaId}/alunos`),
+          fetch(`/api/turmas/${turmaId}/insights`)
         ])
 
         if (turmaRes.ok) {
@@ -37,6 +39,9 @@ export default function TurmaDetailPage() {
         }
         if (alunosRes.ok) {
           setAlunos(await alunosRes.json())
+        }
+        if (insightsRes.ok) {
+          setInsights(await insightsRes.json())
         }
       } catch (error) {
         console.error('Erro ao buscar dados:', error)
@@ -165,25 +170,21 @@ export default function TurmaDetailPage() {
         </TabsContent>
 
         <TabsContent value="desempenho" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base sm:text-lg">Média da Turma</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Desempenho geral dos alunos</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-40 sm:h-64 -mx-4 sm:-mx-6">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={[{ name: 'Turma', media: 7.5 }]}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} domain={[0, 10]} />
-                    <Tooltip />
-                    <Bar dataKey="media" fill="#7c3aed" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+          {insights ? (
+            <TurmaInsights
+              insights={insights.insights}
+              mediaGeral={insights.mediaGeral}
+              alunosComDificuldade={insights.alunosComDificuldade}
+              totalAlunos={insights.totalAlunos}
+            />
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                <TrendingUp className="mb-3 h-12 w-12 text-muted-foreground" />
+                <p className="text-muted-foreground">Nenhum dado de desempenho disponível</p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>
