@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -16,8 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft, Plus, Trash2, GripVertical } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, GripVertical, Image as ImageIcon, Check } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { QuestaoMediaUpload } from "@/components/questao-media-upload"
+import { AspectRatio } from "@/components/ui/aspect-ratio"
 
 interface Questao {
   id: string
@@ -27,14 +29,22 @@ interface Questao {
   alternativa_correta: string
   pontuacao: number
   criterios_correcao: string
+  imagem_url?: string
+}
+
+interface Turma {
+  id: string
+  nome: string
 }
 
 export default function NovaProvaPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingTurmas, setLoadingTurmas] = useState(true)
   const [titulo, setTitulo] = useState("")
   const [disciplina, setDisciplina] = useState("")
-  const [turma, setTurma] = useState("")
+  const [turmaId, setTurmaId] = useState("")
+  const [turmas, setTurmas] = useState<Turma[]>([])
   const [questoes, setQuestoes] = useState<Questao[]>([
     {
       id: crypto.randomUUID(),
@@ -44,8 +54,44 @@ export default function NovaProvaPage() {
       alternativa_correta: "A",
       pontuacao: 1,
       criterios_correcao: "",
+      imagem_url: undefined,
     },
   ])
+
+  // Carregar turmas do professor
+  useEffect(() => {
+    async function loadTurmas() {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+          router.push("/auth/login")
+          return
+        }
+
+        const { data, error } = await supabase
+          .from('turmas')
+          .select('id, nome')
+          .eq('professor_id', user.id)
+          .order('nome')
+
+        if (error) {
+          console.error('Erro ao carregar turmas:', error)
+          setTurmas([])
+        } else {
+          setTurmas(data || [])
+        }
+      } catch (error) {
+        console.error('Erro:', error)
+        setTurmas([])
+      } finally {
+        setLoadingTurmas(false)
+      }
+    }
+
+    loadTurmas()
+  }, [router])
 
   function addQuestao() {
     setQuestoes([
@@ -58,6 +104,7 @@ export default function NovaProvaPage() {
         alternativa_correta: "A",
         pontuacao: 1,
         criterios_correcao: "",
+        imagem_url: undefined,
       },
     ])
   }
@@ -99,7 +146,7 @@ export default function NovaProvaPage() {
         user_id: user.id,
         titulo,
         disciplina,
-        turma: turma || null,
+        turma_id: turmaId || null,
         total_questoes: questoes.length,
       })
       .select()
@@ -120,6 +167,7 @@ export default function NovaProvaPage() {
       alternativa_correta: q.tipo === "objetiva" ? q.alternativa_correta : null,
       pontuacao: q.pontuacao,
       criterios_correcao: q.tipo === "dissertativa" ? q.criterios_correcao : null,
+      imagem_url: q.imagem_url || null,
     }))
 
     const { error: questoesError } = await supabase
@@ -184,13 +232,32 @@ export default function NovaProvaPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="turma">Turma (opcional)</Label>
-              <Input
-                id="turma"
-                placeholder="Ex: 9º Ano A"
-                value={turma}
-                onChange={(e) => setTurma(e.target.value)}
-              />
+              <Label htmlFor="turmaId">Turma (opcional)</Label>
+              {loadingTurmas ? (
+                <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+                  <Spinner className="h-4 w-4" />
+                  <span className="text-sm text-muted-foreground">Carregando turmas...</span>
+                </div>
+              ) : (
+                <Select value={turmaId} onValueChange={setTurmaId}>
+                  <SelectTrigger id="turmaId">
+                    <SelectValue placeholder="Selecione uma turma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {turmas.length === 0 ? (
+                      <SelectItem value="__empty__" disabled>
+                        Nenhuma turma encontrada. Cadastre uma turma primeiro
+                      </SelectItem>
+                    ) : (
+                      turmas.map((turma) => (
+                        <SelectItem key={turma.id} value={turma.id}>
+                          {turma.nome}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -221,6 +288,12 @@ export default function NovaProvaPage() {
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
                       {questao.numero}
                     </span>
+                    {questao.imagem_url && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-chart-2/10 px-2 py-1 text-xs font-medium text-chart-2">
+                        <ImageIcon className="h-3 w-3" />
+                        <Check className="h-3 w-3" />
+                      </span>
+                    )}
                   </div>
                   {questoes.length > 1 && (
                     <Button
@@ -303,6 +376,29 @@ export default function NovaProvaPage() {
                   />
                 </div>
 
+                {/* Preview de Imagem */}
+                {questao.imagem_url && (
+                  <div className="mt-4">
+                    <AspectRatio ratio={16 / 9} className="bg-muted rounded-lg overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={questao.imagem_url}
+                        alt={`Questão ${questao.numero}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </AspectRatio>
+                  </div>
+                )}
+
+                {/* Upload de Mídia */}
+                <div className="mt-4">
+                  <QuestaoMediaUpload
+                    value={questao.imagem_url}
+                    onChange={(url) => updateQuestao(questao.id, "imagem_url", url)}
+                    questaoNumero={questao.numero}
+                  />
+                </div>
+
                 {questao.tipo === "dissertativa" && (
                   <div className="mt-4 space-y-2">
                     <Label>Critérios de Correção</Label>
@@ -335,3 +431,4 @@ export default function NovaProvaPage() {
     </div>
   )
 }
+

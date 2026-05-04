@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     // Upload para Vercel Blob (privado)
     const blob = await put(file.name, file, {
-      access: 'public',
+      access: 'private',
     })
 
     return NextResponse.json({

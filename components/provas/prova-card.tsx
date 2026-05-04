@@ -46,9 +46,9 @@ export function ProvaCard({ prova }: ProvaCardProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
-                <Link href={`/provas/${prova.id}`}>
+                <Link href={`/provas/${prova.id}/visualizar`}>
                   <BookOpen className="mr-2 h-4 w-4" />
-                  <span className="text-xs sm:text-sm">Visualizar</span>
+                  <span className="text-xs sm:text-sm">Visualizar/Imprimir</span>
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
@@ -74,3 +74,4 @@ export function ProvaCard({ prova }: ProvaCardProps) {
     </Card>
   )
 }
+

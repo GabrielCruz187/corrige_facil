@@ -22,8 +22,14 @@ interface Prova {
   id: string
   titulo: string
   disciplina: string
-  turma: string | null
+  turma_id: string | null
   total_questoes: number
+}
+
+interface Aluno {
+  id: string
+  nome: string
+  email?: string
 }
 
 export default function CorrigirPage() {
@@ -32,12 +38,15 @@ export default function CorrigirPage() {
   const provaIdParam = searchParams.get("prova")
 
   const [provas, setProvas] = useState<Prova[]>([])
+  const [alunos, setAlunos] = useState<Aluno[]>([])
   const [selectedProva, setSelectedProva] = useState<string>(provaIdParam || "")
+  const [selectedAluno, setSelectedAluno] = useState<string>("")
   const [nomeAluno, setNomeAluno] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingProvas, setLoadingProvas] = useState(true)
+  const [loadingAlunos, setLoadingAlunos] = useState(false)
   const [correcting, setCorrecting] = useState(false)
   const [result, setResult] = useState<{
     nota: number
@@ -53,20 +62,106 @@ export default function CorrigirPage() {
 
   const loadProvas = useCallback(async () => {
     const supabase = createClient()
-    const { data } = await supabase
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      router.push("/auth/login")
+      return
+    }
+
+    const { data, error } = await supabase
       .from("provas")
-      .select("id, titulo, disciplina, turma, total_questoes")
+      .select("id, titulo, disciplina, turma_id, total_questoes")
+      .eq('user_id', user.id)
       .order("created_at", { ascending: false })
 
-    if (data) {
-      setProvas(data)
+    if (error) {
+      console.error("Erro ao carregar provas:", error)
+      setProvas([])
+    } else {
+      setProvas(data || [])
     }
     setLoadingProvas(false)
+  }, [router])
+
+  // Carregar alunos quando prova for selecionada
+  const loadAlunos = useCallback(async (provaId: string) => {
+    if (!provaId) {
+      setAlunos([])
+      return
+    }
+
+    setLoadingAlunos(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        setAlunos([])
+        return
+      }
+
+      // Buscar a prova para obter turma_id
+      const { data: prova, error: provaError } = await supabase
+        .from('provas')
+        .select('turma_id')
+        .eq('id', provaId)
+        .eq('user_id', user.id)
+        .single()
+
+      if (provaError || !prova || !prova.turma_id) {
+        setAlunos([])
+        setLoadingAlunos(false)
+        return
+      }
+
+      // Verificar se turma pertence ao professor
+      const { data: turma, error: turmaError } = await supabase
+        .from('turmas')
+        .select('id')
+        .eq('id', prova.turma_id)
+        .eq('professor_id', user.id)
+        .single()
+
+      if (turmaError || !turma) {
+        console.error('Turma não encontrada ou não autorizado')
+        setAlunos([])
+        setLoadingAlunos(false)
+        return
+      }
+
+      // Buscar alunos da turma
+      const { data: alunosData, error: alunosError } = await supabase
+        .from('alunos_turma')
+        .select('id, nome, email')
+        .eq('turma_id', prova.turma_id)
+        .order('nome')
+
+      if (alunosError) {
+        console.error('Erro ao carregar alunos:', alunosError)
+        setAlunos([])
+      } else {
+        setAlunos(alunosData || [])
+      }
+    } catch (error) {
+      console.error('Erro:', error)
+      setAlunos([])
+    } finally {
+      setLoadingAlunos(false)
+    }
   }, [])
 
   useEffect(() => {
     loadProvas()
   }, [loadProvas])
+
+  useEffect(() => {
+    if (selectedProva) {
+      loadAlunos(selectedProva)
+      setSelectedAluno("")
+      setNomeAluno("")
+    }
+  }, [selectedProva, loadAlunos])
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selectedFile = e.target.files?.[0]
@@ -87,7 +182,15 @@ export default function CorrigirPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!selectedProva || !nomeAluno || !file) return
+    if (!selectedProva || !file) return
+
+    const alunoId = selectedAluno || null
+    const nome = selectedAluno ? (alunos.find(a => a.id === selectedAluno)?.nome || nomeAluno) : nomeAluno
+
+    if (!nome) {
+      alert("Por favor, selecione um aluno ou digite um nome")
+      return
+    }
 
     setLoading(true)
     setCorrecting(true)
@@ -131,7 +234,8 @@ export default function CorrigirPage() {
         body: JSON.stringify({
           imagemUrl,
           provaId: selectedProva,
-          nomeAluno,
+          nomeAluno: nome,
+          alunoId,
         }),
       })
 
@@ -171,9 +275,13 @@ export default function CorrigirPage() {
   function resetForm() {
     setFile(null)
     setPreview(null)
+    setSelectedAluno("")
     setNomeAluno("")
     setResult(null)
   }
+
+  const provaAtual = provas.find(p => p.id === selectedProva)
+  const temTurma = provaAtual?.turma_id
 
   if (loadingProvas) {
     return (
@@ -219,7 +327,7 @@ export default function CorrigirPage() {
               <div>
                 <CardTitle>Correção Concluída</CardTitle>
                 <CardDescription>
-                  Prova de {nomeAluno} corrigida com sucesso
+                  Prova corrigida com sucesso
                 </CardDescription>
               </div>
             </div>
@@ -292,7 +400,7 @@ export default function CorrigirPage() {
             <CardHeader>
               <CardTitle>Informações da Correção</CardTitle>
               <CardDescription>
-                Selecione a prova e informe os dados do aluno
+                Selecione a prova e o aluno
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -312,6 +420,38 @@ export default function CorrigirPage() {
                 </Select>
               </div>
 
+              {temTurma ? (
+                <div className="space-y-2">
+                  <Label>Aluno</Label>
+                  {loadingAlunos ? (
+                    <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+                      <Spinner className="h-4 w-4" />
+                      <span className="text-sm text-muted-foreground">Carregando alunos...</span>
+                    </div>
+                  ) : alunos.length > 0 ? (
+                    <Select value={selectedAluno} onValueChange={setSelectedAluno}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um aluno" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {alunos.map((aluno) => (
+                          <SelectItem key={aluno.id} value={aluno.id}>
+                            {aluno.nome}
+                            {aluno.email && ` (${aluno.email})`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="rounded-md border border-border bg-muted/50 p-3">
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum aluno cadastrado nesta turma
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
               <div className="space-y-2">
                 <Label htmlFor="nomeAluno">Nome do Aluno *</Label>
                 <Input
@@ -319,7 +459,7 @@ export default function CorrigirPage() {
                   placeholder="Digite o nome do aluno"
                   value={nomeAluno}
                   onChange={(e) => setNomeAluno(e.target.value)}
-                  required
+                  disabled={selectedAluno ? true : false}
                 />
               </div>
 
@@ -366,7 +506,7 @@ export default function CorrigirPage() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={!selectedProva || !nomeAluno || !file || loading}
+                disabled={!selectedProva || !file || (temTurma && !selectedAluno && !nomeAluno) || loading}
               >
                 {correcting ? (
                   <>
