@@ -1,4 +1,4 @@
-import { generateText } from 'ai'
+import { generateWithAI } from '@/lib/ai-provider'
 import { createClient } from '@/lib/supabase/server'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const { imagemUrl, provaId, nomeAluno } = CorrectionSchema.parse(body)
 
     // Autenticar usuário
-    const supabase = createClient()
+    const supabase = await createClient()
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -55,68 +55,81 @@ export async function POST(request: NextRequest) {
       })
       .join('\n\n')
 
-    const prompt = `Você é um professor experiente de educação. Analise a imagem da prova do aluno e corrija-a.
+    const prompt = `Output only JSON. No other text.
 
-QUESTÕES E GABARITO:
+Questions:
 ${questoesTexto}
 
-IMPORTANTE:
-1. Analise cada questão na imagem
-2. Para questões objetivas, verifique se a resposta corresponde ao gabarito
-3. Para questões dissertativas, analise a qualidade da resposta conforme os critérios
-4. Forneça feedback construtivo para cada questão
-5. Atribua uma nota de 0-10 para cada questão
+Return this exact format:
+{"questoes":[{"numero":1,"resposta_aluno":"answer","correta":true,"nota":10,"feedback":"comment"}],"nota_total":10,"resumo":"summary"}
 
-Retorne a resposta em JSON com a seguinte estrutura:
-{
-  "questoes": [
-    {
-      "numero": 1,
-      "resposta_aluno": "resposta identificada",
-      "correta": true/false,
-      "nota": 0-10,
-      "feedback": "feedback detalhado"
-    }
-  ],
-  "nota_total": nota_final_0_a_100,
-  "resumo": "resumo geral da prova"
-}`
+Rules:
+1. ONLY JSON output
+2. No code, no explanation
+3. Field values: numero (number), resposta_aluno (text), correta (true/false), nota (0-10), feedback (text)
+4. nota_total = average of all notas
+5. Nothing before or after JSON`
 
     // Chamar IA com visão computacional
-    const result = await generateText({
-      model: 'google/gemini-2.0-flash',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: prompt,
-            },
-            {
-              type: 'image',
-              image: imagemUrl,
-            },
-          ],
-        },
-      ],
-    })
+    const result = await generateWithAI(
+      `${prompt}\n\nIMAGEM DA PROVA:\n[URL: ${imagemUrl}]`,
+      {
+        temperature: 0.5,
+        maxTokens: 2000,
+      }
+    )
 
     // Parse resposta da IA
     let correcaoData
     try {
+      // Limpar resposta de caracteres desnecessários
+      let cleanedResult = result
+        .replace(/```json\n?/g, '') // Remove ```json
+        .replace(/```\n?/g, '')      // Remove ```
+        .trim()
+
       // Extrair JSON da resposta
-      const jsonMatch = result.text.match(/\{[\s\S]*\}/)
+      const jsonMatch = cleanedResult.match(/\{[\s\S]*\}/)
       if (!jsonMatch) {
-        throw new Error('Nenhum JSON encontrado na resposta')
+        console.error('[v0] Resposta da IA:', cleanedResult.substring(0, 500))
+        console.warn('[v0] JSON não encontrado. Criando resposta fallback.')
+        
+        // Fallback: criar resposta padrão se a IA não conseguir
+        correcaoData = criarRespostaFallback(questoes)
+      } else {
+        let jsonStr = jsonMatch[0]
+        
+        // Remover caracteres de controle e normalize
+        jsonStr = jsonStr
+          .replace(/[\x00-\x1F\x7F]/g, '') // Remove caracteres de controle
+          .replace(/,\s*}/g, '}')           // Remove vírgulas antes de }
+          .replace(/,\s*]/g, ']')           // Remove vírgulas antes de ]
+        
+        correcaoData = JSON.parse(jsonStr)
       }
-      correcaoData = JSON.parse(jsonMatch[0])
     } catch (parseError) {
-      console.error('Erro ao fazer parse da resposta IA:', parseError)
-      return NextResponse.json(
-        { error: 'Erro ao processar resposta da IA' },
-        { status: 500 }
-      )
+      console.error('[v0] Erro ao fazer parse:', parseError)
+      console.error('[v0] Resposta recebida:', result.substring(0, 200))
+      
+      // Fallback final
+      correcaoData = criarRespostaFallback(questoes)
+    }
+
+    // Função fallback para criar resposta padrão
+    function criarRespostaFallback(questoes: any[]) {
+      const questoesData = questoes.map((q, idx) => ({
+        numero: idx + 1,
+        resposta_aluno: 'Não foi possível analisar automaticamente',
+        correta: false,
+        nota: 0,
+        feedback: 'Por favor, revise a prova manualmente. O modelo de IA teve dificuldade em processar a imagem.'
+      }))
+
+      return {
+        questoes: questoesData,
+        nota_total: 0,
+        resumo: 'Correção automática indisponível. Revise manualmente.'
+      }
     }
 
     // Salvar correção no banco
@@ -183,3 +196,6 @@ Retorne a resposta em JSON com a seguinte estrutura:
     )
   }
 }
+
+
+

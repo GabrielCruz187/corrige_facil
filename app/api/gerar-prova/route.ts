@@ -1,4 +1,4 @@
-import { generateText } from 'ai'
+import { generateWithAI } from '@/lib/ai-provider'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -58,20 +58,15 @@ IMPORTANTE:
 - As questões dissertativas devem ter critérios de correção claros
 - Responda APENAS com o JSON válido, sem explicações adicionais`
 
-    const result = await generateText({
-      model: 'openai/gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+    const result = await generateWithAI(prompt, {
+      temperature: 0.7,
+      maxTokens: 2000,
     })
 
     // Parse e validar resposta
     let provaData
     try {
-      provaData = JSON.parse(result.text)
+      provaData = JSON.parse(result)
     } catch {
       return NextResponse.json(
         { error: 'Erro ao processar resposta da IA' },
@@ -88,3 +83,4 @@ IMPORTANTE:
     )
   }
 }
+

@@ -29,7 +29,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Upload para Vercel Blob (privado)
-    const blob = await put(file.name, file, {
+    // Gerar nome único: timestamp + uuid + extensão original
+    const timestamp = Date.now()
+    const randomId = crypto.getRandomValues(new Uint8Array(4)).reduce((acc, val) => acc + val.toString(16).padStart(2, '0'), '')
+    const extension = file.name.split('.').pop() || 'jpg'
+    const uniqueName = `provas/${timestamp}-${randomId}.${extension}`
+
+    const blob = await put(uniqueName, file, {
       access: 'private',
     })
 
@@ -46,3 +52,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
