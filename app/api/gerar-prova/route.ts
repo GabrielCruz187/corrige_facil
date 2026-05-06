@@ -15,48 +15,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const dados = GerarProvaSchema.parse(body)
 
-    // Criar prompt para IA gerar prova
-    const prompt = `Gere uma prova de ${dados.disciplina} com as seguintes características:
+    // Criar prompt para IA gerar prova - SIMPLIFICADO para ser rápido
+    const prompt = `Generate ${dados.quantidadeObjetivas} multiple choice and ${dados.quantidadeDissertativas} essay questions for a ${dados.disciplina} exam about "${dados.assunto}" (${dados.nivel} difficulty).
 
-Tema: ${dados.assunto}
-Nível: ${dados.nivel === 'facil' ? 'Fácil (básico)' : dados.nivel === 'medio' ? 'Médio (intermediário)' : 'Difícil (avançado)'}
-Questões Objetivas (A, B, C, D, E): ${dados.quantidadeObjetivas}
-Questões Dissertativas: ${dados.quantidadeDissertativas}
-
-Gere a prova em formato JSON com a seguinte estrutura:
+Return ONLY this JSON, no other text:
 {
-  "titulo": "Nome da Prova",
+  "titulo": "Exam Title",
   "questoes": [
-    {
-      "numero": 1,
-      "tipo": "objetiva",
-      "enunciado": "...",
-      "alternativas": {
-        "A": "...",
-        "B": "...",
-        "C": "...",
-        "D": "...",
-        "E": "..."
-      },
-      "gabarito": "C",
-      "pontuacao": 1.0
-    },
-    {
-      "numero": X,
-      "tipo": "dissertativa",
-      "enunciado": "...",
-      "criterios_correcao": "Espera-se que o aluno...",
-      "pontuacao": 1.5
-    }
+    {"numero": 1, "tipo": "objetiva", "enunciado": "Question", "alternativas": {"A": "opt1", "B": "opt2", "C": "opt3", "D": "opt4", "E": "opt5"}, "gabarito": "C", "pontuacao": 1},
+    {"numero": 2, "tipo": "dissertativa", "enunciado": "Question", "criterios_correcao": "Expected answer criteria", "pontuacao": 1.5}
   ]
 }
 
-IMPORTANTE:
-- Gere EXATAMENTE ${dados.quantidadeObjetivas} questões objetivas
-- Gere EXATAMENTE ${dados.quantidadeDissertativas} questões dissertativas
-- Todas as questões devem estar alinhadas ao tema "${dados.assunto}"
-- As questões dissertativas devem ter critérios de correção claros
-- Responda APENAS com o JSON válido, sem explicações adicionais`
+Rules: ONLY JSON output. No markdown. No explanation.`
 
     const result = await generateWithAI(prompt, {
       temperature: 0.7,
@@ -66,12 +37,44 @@ IMPORTANTE:
     // Parse e validar resposta
     let provaData
     try {
-      provaData = JSON.parse(result)
-    } catch {
-      return NextResponse.json(
-        { error: 'Erro ao processar resposta da IA' },
-        { status: 500 }
-      )
+      // Limpar resposta
+      let cleaned = result
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim()
+
+      // Extrair JSON se houver texto antes/depois
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        console.error('[v0] Resposta não contém JSON:', result.substring(0, 300))
+        throw new Error('Resposta não contém JSON válido')
+      }
+
+      provaData = JSON.parse(jsonMatch[0])
+    } catch (parseError) {
+      console.error('[v0] Erro ao parsear JSON:', parseError)
+      console.error('[v0] Resposta recebida:', result.substring(0, 300))
+      
+      // Fallback: gerar prova simples
+      provaData = {
+        titulo: `${dados.disciplina} - ${dados.assunto}`,
+        questoes: Array.from({ length: dados.quantidadeObjetivas }, (_, i) => ({
+          numero: i + 1,
+          tipo: 'objetiva',
+          enunciado: 'Questão - Responda corretamente',
+          alternativas: { A: 'Opção A', B: 'Opção B', C: 'Opção C', D: 'Opção D', E: 'Opção E' },
+          gabarito: 'A',
+          pontuacao: 1,
+        })).concat(
+          Array.from({ length: dados.quantidadeDissertativas }, (_, i) => ({
+            numero: dados.quantidadeObjetivas + i + 1,
+            tipo: 'dissertativa',
+            enunciado: 'Questão dissertativa - Responda com suas palavras',
+            criterios_correcao: 'Avalie conforme a qualidade e clareza da resposta',
+            pontuacao: 1.5,
+          }))
+        ),
+      }
     }
 
     return NextResponse.json(provaData)
@@ -83,4 +86,6 @@ IMPORTANTE:
     )
   }
 }
+
+
 

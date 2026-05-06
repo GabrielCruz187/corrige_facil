@@ -70,11 +70,11 @@ export async function generateWithAI(prompt: string, config?: Partial<AIConfig>)
 async function generateWithOllama(prompt: string, config: AIConfig): Promise<string> {
   const ollama = new Ollama({
     host: process.env.OLLAMA_HOST || 'http://localhost:11434',
-    // Aumentar timeout para 5 minutos (300s) - Ollama pode ser lento com modelos grandes
+    // Aumentar timeout para 10 minutos (600s) - Ollama pode ser muito lento
     fetch: async (url: string, options?: any) => {
       return fetch(url, {
         ...options,
-        signal: AbortSignal.timeout(300000), // 5 minutos
+        signal: AbortSignal.timeout(600000), // 10 minutos
       })
     }
   })
