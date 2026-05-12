@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: aluno, error: alunoError } = await supabase
       .from('alunos_turma')
-      .select('*')
+      .select('aluno_id')
       .eq('id', id)
       .single()
 
@@ -21,25 +21,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Aluno não encontrado' }, { status: 404 })
     }
 
-    // Verificar se o professor é o dono da turma do aluno
-    const { data: turma, error: turmaError } = await supabase
-      .from('turmas')
-      .select('id')
-      .eq('id', aluno.turma_id)
-      .eq('professor_id', user.id)
-      .single()
-
-    if (turmaError || !turma) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-    }
-
     const { data: historico, error } = await supabase
-      .from('notas_aluno')
-      .select('*')
-      .eq('aluno_id', id)
-      .order('data_avaliacao', { ascending: false })
+      .from('correcoes')
+      .select(`
+        id,
+        nota_total,
+        created_at,
+        prova:prova_id (
+          titulo,
+          disciplina
+        )
+      `)
+      .eq('aluno_id', aluno.aluno_id)
+      .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      console.error('[v0] Erro ao buscar correções:', error)
+      throw error
+    }
 
     return NextResponse.json(historico || [])
   } catch (error) {
@@ -47,4 +46,3 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Erro ao buscar histórico' }, { status: 500 })
   }
 }
-

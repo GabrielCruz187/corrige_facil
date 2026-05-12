@@ -65,7 +65,7 @@ export default function AlunoDetailPage() {
   }
 
   const mediaNota = historico.length > 0
-    ? (historico.reduce((sum: number, h: any) => sum + h.nota, 0) / historico.length).toFixed(1)
+    ? (historico.reduce((sum: number, h: any) => sum + (h.nota_total || 0), 0) / historico.length).toFixed(1)
     : '-'
 
   return (
@@ -100,7 +100,7 @@ export default function AlunoDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl sm:text-4xl font-bold text-green-600">
-              {historico.length > 0 ? Math.max(...historico.map((h: any) => h.nota)).toFixed(1) : '-'}
+              {historico.length > 0 ? Math.max(...historico.map((h: any) => h.nota_total || 0)).toFixed(1) : '-'}
             </div>
           </CardContent>
         </Card>
@@ -111,7 +111,7 @@ export default function AlunoDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl sm:text-4xl font-bold text-orange-600">
-              {historico.length > 0 ? Math.min(...historico.map((h: any) => h.nota)).toFixed(1) : '-'}
+              {historico.length > 0 ? Math.min(...historico.map((h: any) => h.nota_total || 0)).toFixed(1) : '-'}
             </div>
           </CardContent>
         </Card>
@@ -142,7 +142,7 @@ export default function AlunoDetailPage() {
                     <LineChart data={historico}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
                       <XAxis 
-                        dataKey="titulo_prova" 
+                        dataKey={(h: any) => h.prova?.titulo || 'Prova'}
                         tick={{ fontSize: 12 }}
                         angle={-45}
                         textAnchor="end"
@@ -150,7 +150,7 @@ export default function AlunoDetailPage() {
                       />
                       <YAxis tick={{ fontSize: 12 }} domain={[0, 10]} />
                       <Tooltip />
-                      <Line type="monotone" dataKey="nota" stroke="#7c3aed" strokeWidth={2} dot={{ fill: '#7c3aed' }} />
+                      <Line type="monotone" dataKey="nota_total" stroke="#7c3aed" strokeWidth={2} dot={{ fill: '#7c3aed' }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -175,14 +175,15 @@ export default function AlunoDetailPage() {
                 <div className="space-y-4">
                   {Array.from(
                     historico.reduce((acc: any, item: any) => {
-                      if (!acc[item.disciplina]) {
-                        acc[item.disciplina] = []
+                      const disciplina = item.prova?.disciplina || 'Sem disciplina'
+                      if (!acc[disciplina]) {
+                        acc[disciplina] = []
                       }
-                      acc[item.disciplina].push(item)
+                      acc[disciplina].push(item)
                       return acc
                     }, {})
                   ).map(([disciplina, notas]: any) => {
-                    const media = (notas.reduce((sum: number, n: any) => sum + n.nota, 0) / notas.length).toFixed(1)
+                    const media = (notas.reduce((sum: number, n: any) => sum + (n.nota_total || 0), 0) / notas.length).toFixed(1)
                     return (
                       <div key={disciplina} className="flex items-center justify-between p-3 sm:p-4 rounded-lg border border-border">
                         <div>
@@ -247,3 +248,4 @@ export default function AlunoDetailPage() {
     </div>
   )
 }
+

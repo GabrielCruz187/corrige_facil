@@ -23,38 +23,69 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Turma não encontrada' }, { status: 404 })
     }
 
-    // Buscar todas as notas dos alunos dessa turma
-    const { data: notas, error: notasError } = await supabase
-      .from('notas_aluno')
-      .select(`
-        *,
-        alunos_turma:aluno_id (id, nome),
-        correcoes:correcao_id (questoes, feedback)
-      `)
-      .in(
-        'aluno_id',
-        (
-          await supabase
-            .from('alunos_turma')
-            .select('id')
-            .eq('turma_id', id)
-        ).data?.map((a: any) => a.id) || []
-      )
+    // Buscar todos os alunos da turma
+    const { data: alunosTurma, error: alunosError } = await supabase
+      .from('alunos_turma')
+      .select('aluno_id')
+      .eq('turma_id', id)
 
-    if (notasError || !notas) {
-      return NextResponse.json({ error: 'Erro ao buscar dados' }, { status: 500 })
+    if (alunosError) {
+      console.error('[v0] Erro ao buscar alunos:', alunosError)
+      throw alunosError
     }
 
-    // Agrupar erros por disciplina/tópico
+    if (!alunosTurma || alunosTurma.length === 0) {
+      // Turma sem alunos
+      return NextResponse.json({
+        mediaGeral: '0',
+        totalAlunos: 0,
+        alunosComDificuldade: 0,
+        insights: [],
+        totalAvaliacoes: 0,
+      })
+    }
+
+    const alunosIds = alunosTurma.map((a: any) => a.aluno_id)
+
+    // Buscar todas as correções dos alunos dessa turma
+    const { data: correcoes, error: correcoesError } = await supabase
+      .from('correcoes')
+      .select(`
+        id,
+        aluno_id,
+        nota_total,
+        prova:prova_id (
+          disciplina
+        )
+      `)
+      .in('aluno_id', alunosIds)
+
+    if (correcoesError) {
+      console.error('[v0] Erro ao buscar correções:', correcoesError)
+      throw correcoesError
+    }
+
+    if (!correcoes || correcoes.length === 0) {
+      // Sem correções ainda
+      return NextResponse.json({
+        mediaGeral: '0',
+        totalAlunos: alunosTurma.length,
+        alunosComDificuldade: 0,
+        insights: [],
+        totalAvaliacoes: 0,
+      })
+    }
+
+    // Agrupar por disciplina
     const errosPorDisciplina: Record<string, { total: number; erros: number }> = {}
 
-    notas.forEach((nota: any) => {
-      const disciplina = nota.disciplina || 'Sem Disciplina'
+    correcoes.forEach((correcao: any) => {
+      const disciplina = correcao.prova?.disciplina || 'Sem Disciplina'
       if (!errosPorDisciplina[disciplina]) {
         errosPorDisciplina[disciplina] = { total: 0, erros: 0 }
       }
       errosPorDisciplina[disciplina].total += 1
-      if ((nota.nota || 0) < 6) {
+      if ((correcao.nota_total || 0) < 6) {
         errosPorDisciplina[disciplina].erros += 1
       }
     })
@@ -71,19 +102,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .slice(0, 5)
 
     // Calcular média geral da turma
-    const mediaGeral = (notas.reduce((sum: number, n: any) => sum + (n.nota || 0), 0) / notas.length).toFixed(1)
+    const mediaGeral = correcoes.length > 0
+      ? (correcoes.reduce((sum: number, c: any) => sum + (c.nota_total || 0), 0) / correcoes.length).toFixed(1)
+      : '0'
 
     // Contar alunos com dificuldade (nota < 6)
     const alunosComDificuldade = new Set(
-      notas.filter((n: any) => (n.nota || 0) < 6).map((n: any) => n.aluno_id)
+      correcoes.filter((c: any) => (c.nota_total || 0) < 6).map((c: any) => c.aluno_id)
     ).size
 
     return NextResponse.json({
       mediaGeral,
-      totalAlunos: new Set(notas.map((n: any) => n.aluno_id)).size,
+      totalAlunos: alunosTurma.length,
       alunosComDificuldade,
       insights,
-      totalAvaliacoes: notas.length,
+      totalAvaliacoes: correcoes.length,
     })
   } catch (error: any) {
     console.error('Erro ao buscar insights:', error)
